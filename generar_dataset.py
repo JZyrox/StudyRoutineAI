@@ -1,6 +1,8 @@
 """
 Generador del dataset sintético de perfiles de estudio
 120 registros — basado en técnicas Pomodoro y criterios pedagógicos
+Distribución: 4 tiempos × 3 cantidades de materias × 10 variantes = 120
+Cada rutina objetivo fue generada por el motor de inferencia del Sistema Experto.
 Instituto Tecnológico de Ensenada — IA
 Daniela Guadalupe Hernández Guzmán (21760148)
 """
@@ -11,10 +13,10 @@ import random
 
 #  CONFIGURACIÓN DEL DATASET
 
-TIEMPOS     = [30, 60, 90, 120]          # minutos disponibles
+TIEMPOS      = [30, 60, 90, 120]   # minutos disponibles
 DIFICULTADES = [1, 2, 3, 4, 5]
 
-# Materias variadas — ninguna predeterminada como "la difícil"
+# Catálogo de materias — ninguna predeterminada como "la difícil"
 CATALOGO_MATERIAS = [
     "Matemáticas", "Física", "Química", "Biología", "Historia",
     "Inglés", "Programación", "Cálculo", "Estadística", "Literatura",
@@ -22,13 +24,22 @@ CATALOGO_MATERIAS = [
     "Redes", "Base de Datos", "Electrónica", "Derecho", "Administración"
 ]
 
-#  MOTOR DE REGLAS (igual que el programa principal)
+#  MOTOR DE INFERENCIA DEL SISTEMA EXPERTO
+#
+#  Reglas SI-ENTONCES aplicadas (método Pomodoro + criterios pedagógicos):
+#  - SI hay más de una materia → insertar descanso de 10 min entre ellas.
+#  - SI tiempo >= 60 min → agregar repaso final del 10% del tiempo (mín. 5 min).
+#  - PARA CADA materia → asignar tiempo proporcional a su dificultad relativa.
+#    Ejemplo: dificultades 3 y 2 → 60% y 40% del tiempo de estudio.
+#  - Ningún bloque de estudio puede ser menor a 5 minutos.
 
 def calcular_pesos(materias_dif):
+    """Convierte dificultades en proporciones del tiempo total de estudio."""
     total = sum(d for _, d in materias_dif)
     return [(m, d, d / total) for m, d in materias_dif]
 
 def generar_rutina_objetivo(tiempo_total, materias_dif, duracion_descanso=10, repaso_final=True):
+    """Aplica las reglas del Sistema Experto y devuelve la rutina estructurada."""
     n = len(materias_dif)
     con_pesos = calcular_pesos(materias_dif)
 
@@ -59,23 +70,28 @@ def generar_rutina_objetivo(tiempo_total, materias_dif, duracion_descanso=10, re
 
     return bloques
 
+
 #  GENERACIÓN DE LOS 120 REGISTROS
+#
+#  Cada registro representa un perfil de estudiante hipotético.
+#  La rutina_objetivo es la que el Sistema Experto genera para ese perfil,
+#  y sirve como referencia para verificar el sistema más adelante.
+
 
 def generar_dataset():
-    registros = []
-    random.seed(42)  # Semilla fija para reproducibilidad
+    registros  = []
+    random.seed(42)   # Semilla fija para reproducibilidad
     id_usuario = 1
 
-    # Distribuir 120 registros cubriendo combinaciones representativas:
-    # 4 tiempos × 3 cantidades de materias = 12 grupos × 10 registros = 120
-    for tiempo in TIEMPOS:          # 30, 60, 90, 120 min
-        for n_materias in [1, 2, 3]:  # 1, 2 o 3 materias
-            for _ in range(10):       # 10 variantes por combinación
+    # 4 tiempos × 3 cantidades de materias × 10 variantes = 120 registros
+    for tiempo in TIEMPOS:
+        for n_materias in [1, 2, 3]:
+            for _ in range(10):
 
                 # Elegir materias sin repetir
                 materias_elegidas = random.sample(CATALOGO_MATERIAS, n_materias)
 
-                # Asignar dificultad individual a cada materia (aleatoria)
+                # Asignar dificultad individual a cada materia
                 materias_dif = [
                     (m, random.choice(DIFICULTADES))
                     for m in materias_elegidas
@@ -84,26 +100,27 @@ def generar_dataset():
                 # Dificultad general = promedio redondeado
                 dif_general = round(sum(d for _, d in materias_dif) / n_materias)
 
-                # Generar rutina objetivo con las reglas del experto
-                descanso = 10
-                repaso   = tiempo >= 60  # Repaso solo si hay tiempo suficiente
-                bloques  = generar_rutina_objetivo(tiempo, materias_dif, descanso, repaso)
+                # Generar rutina aplicando las reglas del Sistema Experto
+                repaso  = tiempo >= 60   # Regla: repaso solo si hay tiempo suficiente
+                bloques = generar_rutina_objetivo(tiempo, materias_dif, 10, repaso)
 
                 registros.append({
-                    "id_usuario":        id_usuario,
-                    "tiempo_disponible": tiempo,
-                    "materias":          ",".join(m for m, _ in materias_dif),
-                    "nivel_dificultad":  dif_general,
+                    "id_usuario":             id_usuario,
+                    "tiempo_disponible":      tiempo,
+                    "materias":               ",".join(m for m, _ in materias_dif),
+                    "nivel_dificultad":       dif_general,
                     "dificultad_por_materia": json.dumps(
                         {m: d for m, d in materias_dif}, ensure_ascii=False
                     ),
-                    "rutina_objetivo":   json.dumps(bloques, ensure_ascii=False)
+                    "rutina_objetivo":        json.dumps(bloques, ensure_ascii=False)
                 })
                 id_usuario += 1
 
     return registros
 
+
 #  GUARDAR CSV
+
 
 def guardar_csv(registros, ruta="dataset_estudio.csv"):
     campos = [

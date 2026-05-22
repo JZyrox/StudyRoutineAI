@@ -3,6 +3,11 @@ Sistema de Recomendación de Rutinas de Estudio — Con Interfaz Gráfica en
 Tkinter + historial de sesiones en JSON local 
 Instituto Tecnológico de Ensenada — Inteligencia Artificial
 Daniela Guadalupe Hernández Guzmán (21760148)
+
+Formas para correr el proyecto completo: 
+python generar_dataset.py
+python preprocesamiento_validacion.py
+python rutina_estudio.py
 """
 
 import tkinter as tk
@@ -42,6 +47,13 @@ FUENTE_MONO    = ("Consolas", 10)
 
 
 #  MOTOR DE REGLAS (reutilizado del CLI)
+#
+#  Reglas aplicadas (basadas en el método Pomodoro y criterios pedagógicos):
+#  - Cada materia recibe tiempo proporcional a su dificultad relativa.
+#    Ejemplo: con 2 materias de dificultad 3 y 2 → 60% y 40% del tiempo.
+#  - Descansos entre materias (duración configurable por el usuario).
+#  - Repaso final = 10% del tiempo total si el usuario lo activa (mín. 5 min).
+#  - Ningún bloque de estudio puede ser menor a 5 minutos.
 
 def calcular_pesos(materias):
     total_dif = sum(m["dificultad"] for m in materias)

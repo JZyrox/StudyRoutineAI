@@ -1,9 +1,9 @@
 """
-Preprocesamiento y Validación del Dataset (programa principal)
-- Limpieza y normalización
+Preprocesamiento y Verificación del Dataset
+- Limpieza y normalización de datos
 - One-hot encoding de materias
-- División 80/20 entrenamiento/validación
-- Validación del sistema de reglas contra rutinas objetivo
+- División 80/20: depuración de reglas / verificación del sistema
+- Verificación del Sistema Experto contra rutinas objetivo del experto
 Instituto Tecnológico de Ensenada — IA
 Daniela Guadalupe Hernández Guzmán (21760148)
 """
@@ -13,7 +13,7 @@ import json
 import math
 
 
-#  CATÁLOGO DE MATERIAS (para one-hot)
+#  CATÁLOGO DE MATERIAS
 
 
 CATALOGO_MATERIAS = [
@@ -24,8 +24,14 @@ CATALOGO_MATERIAS = [
 ]
 
 
-#  MOTOR DE REGLAS (idéntico al programa principal)
-
+#  MOTOR DE INFERENCIA (idéntico al programa principal)
+#
+#  El Sistema Experto aplica estas reglas SI-ENTONCES:
+#  - SI hay más de una materia → insertar descanso de 10 min entre ellas.
+#  - SI tiempo >= 60 min → agregar repaso final del 10% del tiempo (mín. 5 min).
+#  - PARA CADA materia → asignar tiempo proporcional a su dificultad relativa.
+#    Ejemplo: con dificultad 3 y 2 → 60% y 40% del tiempo de estudio.
+#  - Ningún bloque de estudio puede ser menor a 5 minutos.
 
 def calcular_pesos(materias_dif):
     total = sum(d for _, d in materias_dif)
@@ -98,23 +104,22 @@ def cargar_dataset(ruta="dataset_estudio.csv"):
 
 
 #  PASO 2 — NORMALIZACIÓN
+#  Escala nivel_dificultad de 1-5 a 0-1 para que el peso sea proporcional
+#  al tiempo disponible dentro del motor de inferencia.
 
 
 def normalizar(registros):
-    """Escala nivel_dificultad de 1-5 a 0-1 con fórmula (val-1)/4."""
     for r in registros:
         r["dificultad_normalizada"] = (r["nivel_dificultad"] - 1) / 4
     return registros
 
 
 #  PASO 3 — ONE-HOT ENCODING DE MATERIAS
+#  Representa cada materia como vector binario.
+#  Estructura los datos de forma estándar para análisis y presentación.
 
 
 def one_hot_encoding(registros):
-    """
-    Crea un vector binario por registro indicando qué materias están presentes.
-    Útil para futura extensión a modelos ML.
-    """
     for r in registros:
         vector = {m: 0 for m in CATALOGO_MATERIAS}
         for materia in r["lista_materias"]:
@@ -124,26 +129,29 @@ def one_hot_encoding(registros):
     return registros
 
 
-#  PASO 4 — DIVISIÓN 80/20
+#  PASO 4 — DIVISIÓN DEL DATASET (80% depuración / 20% verificación)
+#
+#  El 80% (96 registros) se usó para depurar y ajustar las reglas
+#  del Sistema Experto durante su diseño.
+#  El 20% (24 registros) se reserva para verificar que el sistema
+#  genera rutinas correctas en casos no vistos durante el diseño.
 
 
 def dividir_dataset(registros):
-    total       = len(registros)
-    corte       = math.floor(total * 0.80)   # 96 entrenamiento, 24 validación
-    entrenamiento = registros[:corte]
-    validacion    = registros[corte:]
-    return entrenamiento, validacion
+    corte        = math.floor(len(registros) * 0.80)
+    depuracion   = registros[:corte]    # 96 registros — ajuste de reglas
+    verificacion = registros[corte:]    # 24 registros — verificación final
+    return depuracion, verificacion
 
 
-#  PASO 5 — VALIDACIÓN DEL SISTEMA DE REGLAS
+#  PASO 5 — VERIFICACIÓN DEL SISTEMA EXPERTO
+#
+#  Se compara la rutina que genera el motor de inferencia contra
+#  la rutina objetivo definida por el experto en el dataset.
+#  Tolerancia de ±2 minutos en duración de cada bloque.
 
 
 def comparar_rutinas(generada, objetivo):
-    """
-    Métrica: coincidencia de bloques de estudio.
-    Se compara materia y duración de cada bloque tipo 'estudio'.
-    Tolerancia de ±2 minutos en duración.
-    """
     est_gen = [b for b in generada  if b["tipo"] == "estudio"]
     est_obj = [b for b in objetivo  if b["tipo"] == "estudio"]
 
@@ -157,11 +165,11 @@ def comparar_rutinas(generada, objetivo):
             return False
     return True
 
-def validar_sistema(validacion):
+def verificar_sistema(verificacion):
     correctos = 0
     errores   = []
 
-    for r in validacion:
+    for r in verificacion:
         tiempo  = r["tiempo_disponible"]
         repaso  = tiempo >= 60
         mat_dif = list(r["dificultad_por_materia"].items())
@@ -173,28 +181,29 @@ def validar_sistema(validacion):
             correctos += 1
         else:
             errores.append({
-                "id": r["id_usuario"],
-                "tiempo": tiempo,
+                "id":       r["id_usuario"],
+                "tiempo":   tiempo,
                 "materias": r["materias"],
                 "generada": rutina_generada,
                 "objetivo": rutina_objetivo
             })
 
-    precision = (correctos / len(validacion)) * 100
+    precision = (correctos / len(verificacion)) * 100
     return precision, errores
 
 
 #  REPORTE FINAL
 
-def imprimir_reporte(entrenamiento, validacion, precision, errores):
+
+def imprimir_reporte(depuracion, verificacion, precision, errores):
     sep = "─" * 54
     print("\n" + "═" * 54)
-    print("  REPORTE DE PREPROCESAMIENTO Y VALIDACIÓN")
+    print("  REPORTE DE PREPROCESAMIENTO Y VERIFICACIÓN")
     print("═" * 54)
 
-    print(f"\n  Total de registros cargados : {len(entrenamiento) + len(validacion)}")
-    print(f"  Entrenamiento (80%)         : {len(entrenamiento)} registros")
-    print(f"  Validación    (20%)         : {len(validacion)} registros")
+    print(f"\n  Total de registros cargados  : {len(depuracion) + len(verificacion)}")
+    print(f"  Depuración de reglas (80%)   : {len(depuracion)} registros")
+    print(f"  Verificación del sistema(20%): {len(verificacion)} registros")
 
     print(f"\n{sep}")
     print("  PREPROCESAMIENTO APLICADO")
@@ -202,15 +211,15 @@ def imprimir_reporte(entrenamiento, validacion, precision, errores):
     print("  ✔ Separación de materias en lista individual")
     print("  ✔ Normalización de dificultad (1-5 → 0.0-1.0)")
     print("  ✔ One-hot encoding de materias")
-    print(f"  ✔ División 80/20 (sin mezcla aleatoria para reproducibilidad)")
+    print("  ✔ División 80/20 (sin mezcla aleatoria para reproducibilidad)")
 
     print(f"\n{sep}")
-    print("  VALIDACIÓN DEL SISTEMA DE REGLAS")
+    print("  VERIFICACIÓN DEL SISTEMA EXPERTO")
     print(sep)
-    print(f"  Registros evaluados : {len(validacion)}")
-    print(f"  Coincidencias       : {len(validacion) - len(errores)}")
+    print(f"  Registros evaluados : {len(verificacion)}")
+    print(f"  Coincidencias       : {len(verificacion) - len(errores)}")
     print(f"  Discrepancias       : {len(errores)}")
-    print(f"  Precisión           : {precision:.1f}%")
+    print(f"  Exactitud           : {precision:.1f}%")
 
     if errores:
         print(f"\n  Primeros errores detectados (tolerancia ±2 min):")
@@ -219,7 +228,9 @@ def imprimir_reporte(entrenamiento, validacion, precision, errores):
 
     print("\n" + "═" * 54)
 
+
 #  MAIN
+
 
 def main():
     print("\n  Cargando dataset...")
@@ -229,12 +240,12 @@ def main():
     registros = normalizar(registros)
     registros = one_hot_encoding(registros)
 
-    entrenamiento, validacion = dividir_dataset(registros)
+    depuracion, verificacion = dividir_dataset(registros)
 
-    print("  Validando sistema de reglas...")
-    precision, errores = validar_sistema(validacion)
+    print("  Verificando Sistema Experto...")
+    precision, errores = verificar_sistema(verificacion)
 
-    imprimir_reporte(entrenamiento, validacion, precision, errores)
+    imprimir_reporte(depuracion, verificacion, precision, errores)
 
 if __name__ == "__main__":
     main()
